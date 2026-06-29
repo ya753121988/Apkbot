@@ -6,7 +6,7 @@ import json
 from flask import Flask, request, abort
 from pymongo import MongoClient
 
-# --- আপনার দেওয়া সকল কনফিগারেশন (No Changes) ---
+# --- আপনার সকল কনফিগারেশন ---
 API_TOKEN = '8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s'
 GITHUB_TOKEN = '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'
 GITHUB_REPO = 'ya753121988/Apkbot'
@@ -28,7 +28,7 @@ def get_u(cid):
         db.insert_one(u)
     return u
 
-# --- গিটহাবে ফাইল পুশ করার ফাংশন ---
+# --- গিটহাব পুশ ফাংশন ---
 def push_gh(path, content):
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -43,9 +43,14 @@ def push_gh(path, content):
     res = requests.put(url, json=payload, headers=headers)
     return res.status_code
 
-# --- মাস্টার অটো-সেটআপ (এই লিঙ্কে ঢুকলে ফাইল ইনজেক্ট হবে) ---
-@app.route("/")
+# --- রেন্ডার লাইভ চেক (Not Found সমাধান করার জন্য) ---
+@app.route('/')
 def index():
+    return "✅ Server is running perfectly!", 200
+
+# --- অটো সেটআপ রাউট ---
+@app.route("/setup")
+def setup_files():
     try:
         files = {
             "pubspec.yaml": "name: apkbot\ndescription: Master\nversion: 1.0.0+1\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\ndependencies:\n  flutter: {sdk: flutter}\n  webview_flutter: ^4.2.2\n  url_launcher: ^6.1.11\nflutter: {uses-material-design: true}",
@@ -57,13 +62,10 @@ def index():
             "android/app/src/main/AndroidManifest.xml": "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<uses-permission android:name='android.permission.INTERNET'/>\n<application android:label='AppBuilder'>\n<activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN'/><category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>",
             ".github/workflows/main.yml": f"name: Build\non: [repository_dispatch, push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: subosito/flutter-action@v2\n      - run: flutter build apk --release\n      - run: flutter build appbundle --release\n      - name: Send Document\n        run: |\n          curl -F chat_id='${{{{ github.event.client_payload.cid }}}}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot{API_TOKEN}/sendDocument\n          curl -F chat_id='${{{{ github.event.client_payload.cid }}}}' -F document=@build/app/outputs/bundle/release/app-release.aab https://api.telegram.org/bot{API_TOKEN}/sendDocument"
         }
-        report = []
-        for path, content in files.items():
-            status = push_gh(path, content)
-            report.append(f"{path}: {status}")
-        return f"<h1>✅ Bot Is Live!</h1><p>Setup Status: {', '.join(report)}</p>", 200
+        rep = [f"{p}: {push_gh(p, c)}" for p, c in files.items()]
+        return f"Setup Result: {', '.join(rep)}", 200
     except Exception as e:
-        return f"Error: {str(e)}", 500
+        return str(e), 500
 
 # --- বটের কমান্ডসমূহ ---
 @bot.message_handler(commands=['addbalance'])
@@ -122,8 +124,8 @@ def steps(m):
             json={"event_type":"build_app","client_payload":{"cid":str(m.chat.id)}},
             headers={"Authorization":f"token {GITHUB_TOKEN}"})
 
-# --- টেলিগ্রাম ওয়েবহুক রাউট (Render এর জন্য অত্যন্ত জরুরি) ---
-@app.route('/' + API_TOKEN, methods=['POST'])
+# --- টেলিগ্রাম ওয়েবহুক রাউট ---
+@app.route('/webhook', methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')
@@ -133,8 +135,6 @@ def webhook():
     else:
         abort(403)
 
-# --- রেন্ডার পোর্ট এবং সার্ভার রান ---
+# --- রেন্ডার পোর্ট এবং রান ---
 if __name__ == "__main__":
-    # Render নিজে থেকে PORT এনভায়রনমেন্ট ভেরিয়েবল সেট করে দেয়
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
