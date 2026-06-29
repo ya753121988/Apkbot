@@ -1,8 +1,8 @@
 flask
-flask-cors
 flask-socketio
+flask-cors
 pymongo
 dnspython
 requests
-gunicorn
 eventlet
+gunicorn
