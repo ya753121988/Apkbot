@@ -1,3 +1,4 @@
+
 name: Build
 on: [repository_dispatch, push]
 jobs:
@@ -5,7 +6,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Progress 20%
+        run: curl -s -X POST https://api.telegram.org/bot8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s/editMessageText -d chat_id=7120801813 -d message_id=226 -d text="🔨 পরিবেশ সেটআপ হচ্ছে... [██░░░░░░░░] 20%"
       - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.10.0'
+      - name: Progress 50%
+        run: curl -s -X POST https://api.telegram.org/bot8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s/editMessageText -d chat_id=7120801813 -d message_id=226 -d text="🔨 APK তৈরি হচ্ছে... [█████░░░░░] 50%"
       - run: flutter build apk --release
-      - name: Send Document
-        run: curl -F chat_id='${{ github.event.client_payload.cid }}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s/sendDocument
+      - name: Progress 100%
+        run: curl -s -X POST https://api.telegram.org/bot8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s/editMessageText -d chat_id=7120801813 -d message_id=226 -d text="✅ বিল্ড সফল! ফাইল পাঠানো হচ্ছে..."
+      - name: Send Files
+        run: |
+          curl -F chat_id='7120801813' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s/sendDocument
