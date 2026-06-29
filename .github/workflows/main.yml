@@ -1,5 +1,22 @@
-- name: Inject Configuration
+name: Build App
+on: [repository_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Inject Config
         run: |
-          sed -i "s|APP_URL_PLACEHOLDER|${{ github.event.client_payload.url }}|g" lib/config.dart
-          sed -i "s|APP_NAME_PLACEHOLDER|${{ github.event.client_payload.name }}|g" android/app/src/main/AndroidManifest.xml
-          # এইভাবে কালার এবং মেনু লিংকও ইনজেক্ট হবে
+          sed -i "s|APP_NAME_HERE|${{ github.event.client_payload.name }}|g" lib/main.dart
+          sed -i "s|APP_URL_HERE|${{ github.event.client_payload.url }}|g" lib/main.dart
+          sed -i "s|APP_COLOR_HERE|${{ github.event.client_payload.color }}|g" lib/main.dart
+          sed -i "s|APP_DEV_HERE|${{ github.event.client_payload.dev }}|g" lib/main.dart
+      - run: flutter build apk --release
+      - run: flutter build appbundle --release
+      - name: Send APK
+        run: |
+          curl -F "chat_id=${{ github.event.client_payload.cid }}" -F "document=@build/app/outputs/flutter-apk/app-release.apk" https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendDocument
+          curl -F "chat_id=${{ github.event.client_payload.cid }}" -F "document=@build/app/outputs/bundle/release/app-release.aab" https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendDocument
