@@ -1,2 +1,2 @@
 import 'package:flutter/material.dart';
-void main()=>runApp(MaterialApp(home:Scaffold(body:Center(child:Text('Server Ready')))));
+void main()=>runApp(MaterialApp(home:Scaffold(body:Center(child:Text('System Ready')))));
