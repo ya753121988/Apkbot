@@ -1,2 +1,4 @@
 import 'package:flutter/material.dart';
-void main()=>runApp(MaterialApp(home:Scaffold(body:Center(child:Text('System Ready')))));
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+void main()=>runApp(MaterialApp(home:Scaffold(appBar:AppBar(title:Text('jdndjjdnd'),backgroundColor:Color(0xffff5733),actions:[PopupMenuButton(onSelected:(v)=>launchUrl(Uri.parse('https://apkbotnkn.onrender.com/')),itemBuilder:(c)=>[PopupMenuItem(value:1,child:Text('Developer'))])]),body:WebViewWidget(controller:WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..loadRequest(Uri.parse('https://apkbotnkn.onrender.com/')))),debugShowCheckedModeBanner:false));
