@@ -4,7 +4,7 @@ from pymongo import MongoClient
 
 # --- আপনার দেওয়া ইনফরমেশন (Hardcoded) ---
 API_TOKEN = '8876597863:AAH1VB8WbDUn9pGvskiNLAQSL29rGNerMec'
-GITHUB_TOKEN = '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'
+GITHUB_TOKEN = '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'
 GITHUB_REPO = 'ya753121988/Apkbot'
 MONGO_URI = 'mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
 ADMIN_ID = 7120801813
