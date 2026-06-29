@@ -1,1 +1,5 @@
-flask, pymongo, dnspython, gunicorn, requests
+flask
+pymongo
+dnspython
+gunicorn
+requests
