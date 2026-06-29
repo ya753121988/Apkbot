@@ -1,11 +1,29 @@
-name: Build
-on: [repository_dispatch, push]
+name: Build APK
+on:
+  repository_dispatch:
+    types: [build_app]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - name: Inject App Data
+        run: |
+          # main.dart ফাইলে নাম এবং URL বদলে দেওয়া হচ্ছে
+          sed -i "s|APP_NAME_PLACEHOLDER|${{ github.event.client_payload.name }}|g" lib/main.dart
+          sed -i "s|URL_PLACEHOLDER|${{ github.event.client_payload.url }}|g" lib/main.dart
+
       - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.10.0'
+
       - run: flutter build apk --release
-      - name: Send Document
-        run: curl -F chat_id='${{ github.event.client_payload.cid }}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s/sendDocument
+
+      - name: Send APK to Telegram
+        run: |
+          curl -F chat_id="${{ github.event.client_payload.cid }}" \
+               -F document=@build/app/outputs/flutter-apk/app-release.apk \
+               -F caption="✅ আপনার অ্যাপ তৈরি হয়ে গেছে!" \
+               https://api.telegram.org/bot${{ github.event.client_payload.token }}/sendDocument
