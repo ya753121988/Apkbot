@@ -1,0 +1,5 @@
+- name: Inject Configuration
+        run: |
+          sed -i "s|APP_URL_PLACEHOLDER|${{ github.event.client_payload.url }}|g" lib/config.dart
+          sed -i "s|APP_NAME_PLACEHOLDER|${{ github.event.client_payload.name }}|g" android/app/src/main/AndroidManifest.xml
+          # এইভাবে কালার এবং মেনু লিংকও ইনজেক্ট হবে
