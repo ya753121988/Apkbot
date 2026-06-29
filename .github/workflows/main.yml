@@ -8,7 +8,7 @@ jobs:
       - uses: subosito/flutter-action@v2
       - run: flutter build apk --release
       - run: flutter build appbundle --release
-      - name: Send Files
+      - name: Send Document
         run: |
-          curl -v -F chat_id='${{ github.event.client_payload.cid }}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot8876597863:AAH1VB8WbDUn9pGvskiNLAQSL29rGNerMec/sendDocument
-          curl -v -F chat_id='${{ github.event.client_payload.cid }}' -F document=@build/app/outputs/bundle/release/app-release.aab https://api.telegram.org/bot8876597863:AAH1VB8WbDUn9pGvskiNLAQSL29rGNerMec/sendDocument
+          curl -F chat_id='${{ github.event.client_payload.cid }}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot8876597863:AAH1VB8WbDUn9pGvskiNLAQSL29rGNerMec/sendDocument
+          curl -F chat_id='${{ github.event.client_payload.cid }}' -F document=@build/app/outputs/bundle/release/app-release.aab https://api.telegram.org/bot8876597863:AAH1VB8WbDUn9pGvskiNLAQSL29rGNerMec/sendDocument
