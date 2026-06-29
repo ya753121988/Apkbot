@@ -1,19 +1,24 @@
-import os, requests, telebot
+import os
+import requests
+import telebot
 from flask import Flask, request
 from pymongo import MongoClient
 
-# কনফিগারেশন
-API_TOKEN = '8876597863:AAH1VB8WbDUn9pGvskiNLAQSL29rGNerMec'
-MONGO_URI = 'mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
-GITHUB_TOKEN = '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'
-GITHUB_REPO = 'https://github.com/ya753121988/Apkbot.git'
-ADMIN_ID = 7120801813 # আপনার আইডি
-OWNER_ID = "@AkashDeveloperBot"
-PRICE = 30
+# --- ভেরিয়েবল কনফিগারেশন (এগুলো Vercel থেকে আসবে) ---
+API_TOKEN = os.environ.get('API_TOKEN')
+MONGO_URI = os.environ.get('MONGO_URI')
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+GITHUB_REPO = os.environ.get('GITHUB_REPO')
+ADMIN_ID = os.environ.get('ADMIN_ID')
+OWNER_ID = os.environ.get('OWNER_ID')
+PRICE = os.environ.get('PRICE', '10')
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
-db = MongoClient(MONGO_URI)['AppDB']['users']
+
+# ডাটাবেস কানেকশন
+client = MongoClient(MONGO_URI)
+db = client['AppDB']['users']
 
 def get_u(cid):
     u = db.find_one({"cid": cid})
@@ -24,21 +29,23 @@ def get_u(cid):
 
 @bot.message_handler(commands=['addbalance'])
 def add(m):
-    if m.from_user.id != ADMIN_ID: return
-    p = m.text.split()
-    db.update_one({"cid": int(p[1])}, {"$inc": {"bal": int(p[2])}}, upsert=True)
-    bot.reply_to(m, "✅ Added")
+    if str(m.from_user.id) != str(ADMIN_ID): return
+    try:
+        p = m.text.split()
+        db.update_one({"cid": int(p[1])}, {"$inc": {"bal": int(p[2])}}, upsert=True)
+        bot.reply_to(m, "✅ Balance Added Successfully!")
+    except: bot.reply_to(m, "❌ Format: /addbalance [UID] [Amount]")
 
 @bot.message_handler(commands=['start', 'balance'])
 def start(m):
     u = get_u(m.chat.id)
-    bot.send_message(m.chat.id, f"💰 Bal: {u['bal']} TK\nCreate: /create\nOwner: {OWNER_ID}")
+    bot.send_message(m.chat.id, f"💰 Balance: {u['bal']} TK\nTo Create App: /create\nOwner: {OWNER_ID}")
 
 @bot.message_handler(commands=['create'])
 def create(m):
     u = get_u(m.chat.id)
-    if u['bal'] < PRICE:
-        bot.reply_to(m, f"❌ Low Balance! Contact {OWNER_ID}")
+    if u['bal'] < int(PRICE):
+        bot.reply_to(m, f"❌ Low Balance! Contact {OWNER_ID} to recharge.")
         return
     db.update_one({"cid": m.chat.id}, {"$set": {"step": "name"}})
     bot.reply_to(m, "Enter App Name:")
@@ -46,7 +53,8 @@ def create(m):
 @bot.message_handler(func=lambda m: True, content_types=['text', 'photo'])
 def handle(m):
     u = get_u(m.chat.id)
-    s = u['step']
+    s = u.get('step', 'n')
+    
     if s == "name":
         db.update_one({"cid": m.chat.id}, {"$set": {"data.name": m.text, "step": "url"}})
         bot.send_message(m.chat.id, "Enter Website URL:")
@@ -62,19 +70,23 @@ def handle(m):
     elif s == "logo" and m.content_type == 'photo':
         img = bot.get_file(m.photo[-1].file_id)
         l_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{img.file_path}"
-        db.update_one({"cid": m.chat.id}, {"$inc": {"bal": -PRICE}, "$set": {"step": "n"}})
-        bot.send_message(m.chat.id, "✅ Payment Success! Building App...")
+        db.update_one({"cid": m.chat.id}, {"$inc": {"bal": -int(PRICE)}, "$set": {"step": "n"}})
+        bot.send_message(m.chat.id, "✅ Payment Success! Building App... Please wait 15 mins.")
+        
         requests.post(f"https://api.github.com/repos/{GITHUB_REPO}/dispatches", 
             json={"event_type":"build","client_payload":{"name":u['data']['name'],"url":u['data']['url'],"color":u['data']['color'],"dev":u['data']['dev'],"logo":l_url,"cid":str(m.chat.id)}},
-            headers={"Authorization":f"token {GITHUB_TOKEN}"})
+            headers={"Authorization":f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"})
 
-@app.route('/'+API_TOKEN, methods=['POST'])
+@app.route('/' + API_TOKEN, methods=['POST'])
 def webhook():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "!", 200
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return ''
+    else:
+        return "Forbidden", 403
 
 @app.route("/")
-def i():
-    bot.remove_webhook()
-    bot.set_webhook(url='https://'+request.host+'/'+API_TOKEN)
-    return "Running", 200
+def index():
+    return "Bot is Running Securely!", 200
