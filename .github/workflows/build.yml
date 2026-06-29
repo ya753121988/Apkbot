@@ -1,0 +1,35 @@
+name: Ultimate SaaS App Builder
+on:
+  repository_dispatch:
+    types: [app_build]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build Logic
+        run: |
+          mkdir -p output
+          echo "Building ${{ github.event.client_payload.appName }} for ${{ github.event.client_payload.platform }}"
+          # এখানে আসল বিল্ড লজিক থাকে। টেস্টিং এর জন্য একটি ডামি ফাইল তৈরি করা হলো:
+          echo "Built successfully" > output/app.apk
+
+      - name: Upload to Cloud
+        id: upload
+        run: |
+          # transfer.sh এ আপলোড করে একটি ডাউনলোড লিঙ্ক তৈরি
+          URL=$(curl --upload-file ./output/app.apk https://transfer.sh/${{ github.event.client_payload.appName }}.apk)
+          echo "::set-output name=link::$URL"
+
+      - name: Notify Backend
+        run: |
+          curl -X POST https://YOUR_RENDER_URL.onrender.com/api/build-done \
+          -H "Content-Type: application/json" \
+          -d '{
+            "orderId": "${{ github.event.client_payload.orderId }}",
+            "userId": "${{ github.event.client_payload.userId }}",
+            "downloadUrl": "${{ steps.upload.outputs.link }}"
+          }'
