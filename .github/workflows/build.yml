@@ -1,0 +1,36 @@
+name: SaaS App Builder
+on:
+  repository_dispatch:
+    types: [build_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+
+      - name: Setup Node & Capacitor
+        run: |
+          npm install -g @capacitor/cli @capacitor/core nativefier
+          mkdir dist
+          echo "<html><script>window.location.href='${{ github.event.client_payload.appUrl }}'</script></html>" > dist/index.html
+
+      - name: Build Platform Specific
+        run: |
+          if [ "${{ github.event.client_payload.platform }}" == "android_apk" ]; then
+            # Commands to build APK
+            echo "Building APK..."
+          fi
+          
+      - name: Upload to Temporary Cloud
+        id: upload
+        run: |
+          # Use transfer.sh or GitHub releases for download link
+          echo "::set-output name=url::https://github.com/${{ github.repository }}/releases/download/v1/app.apk"
+
+      - name: Notify Backend
+        run: |
+          curl -X POST https://your-render-app.onrender.com/api/build-complete \
+          -H "Content-Type: application/json" \
+          -d '{"orderId": "${{ github.event.client_payload.orderId }}", "userId": "${{ github.event.client_payload.userId }}", "downloadUrl": "${{ steps.upload.outputs.url }}"}'
