@@ -3,13 +3,13 @@ from flask import Flask, request
 from pymongo import MongoClient
 
 # কনফিগারেশন
-API_TOKEN = 'YOUR_BOT_TOKEN'
-MONGO_URI = 'YOUR_MONGODB_URI'
-GITHUB_TOKEN = 'YOUR_GITHUB_TOKEN'
-GITHUB_REPO = 'YOUR_USER/YOUR_REPO'
-ADMIN_ID = 12345678 # আপনার আইডি
-OWNER_ID = "@Your_Username"
-PRICE = 10
+API_TOKEN = '8876597863:AAH1VB8WbDUn9pGvskiNLAQSL29rGNerMec'
+MONGO_URI = 'mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+GITHUB_TOKEN = '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'
+GITHUB_REPO = 'https://github.com/ya753121988/Apkbot.git'
+ADMIN_ID = 7120801813 # আপনার আইডি
+OWNER_ID = "@AkashDeveloperBot"
+PRICE = 30
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
