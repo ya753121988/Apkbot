@@ -19,7 +19,7 @@ users_col = db['users']
 orders_col = db['orders']
 
 # --- Config ---
-GITHUB_TOKEN = "YOUR_GITHUB_TOKEN" # আপনার টোকেন দিন
+GITHUB_TOKEN = "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" # আপনার টোকেন দিন
 GITHUB_REPO = "ya753121988/Apkbot" # আপনার রিপোজিটরি দিন
 ADMIN_PASS = "admin789"
 
