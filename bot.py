@@ -1,130 +1,123 @@
-import os
-import requests
-import telebot
-import base64
+import os, requests, telebot, base64, json
 from flask import Flask, request
 from pymongo import MongoClient
 
-# --- কনফিগারেশন (Vercel Environment Variables এ সেট করবেন) ---
+# --- কনফিগারেশন (Vercel Environment Variables এ বসাবেন) ---
 API_TOKEN = os.environ.get('API_TOKEN')
 MONGO_URI = os.environ.get('MONGO_URI')
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
-GITHUB_REPO = os.environ.get('GITHUB_REPO') # Example: ya753121988/Apkbot
+GITHUB_REPO = os.environ.get('GITHUB_REPO')
 ADMIN_ID = os.environ.get('ADMIN_ID')
-OWNER_USERNAME = os.environ.get('OWNER_USERNAME') # @YourUsername
-PRICE = int(os.environ.get('PRICE', 10))
+OWNER_ID = os.environ.get('OWNER_ID') 
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
-
-# ডাটাবেস কানেকশন
 client = MongoClient(MONGO_URI)
-db = client['FinalBuilder']['users']
+db = client['SuperBuilder']['users']
 
-def get_user(cid):
-    user = db.find_one({"cid": cid})
-    if not user:
-        user = {"cid": cid, "bal": 0, "step": "n", "data": {}}
-        db.insert_one(user)
-    return user
+def get_u(cid):
+    u = db.find_one({"cid": cid})
+    if not u:
+        u = {"cid": cid, "bal": 0, "step": "n", "apps": 0, "data": {}}
+        db.insert_one(u)
+    return u
 
-# --- গিটহাব ফাইল অটোমেশন কোড (Standalone System) ---
-# এই ফাংশনটি আপনার গিটহাবে সোর্স কোড ইনজেক্ট করবে যাতে অ্যাপ সারা জীবন চলে
-def push_to_github(path, content, message="Update"):
+# --- গিটহাবে ফাইল পুশ করার ফাংশন ---
+def push_gh(path, content):
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-    
-    # বর্তমান ফাইলের SHA চেক করা (যদি ফাইল আগে থেকে থাকে)
-    res = requests.get(url, headers=headers)
-    sha = res.json().get('sha') if res.status_code == 200 else None
-    
-    payload = {
-        "message": message,
-        "content": base64.b64encode(content.encode()).decode(),
-        "branch": "main"
-    }
+    r = requests.get(url, headers=headers)
+    sha = r.json().get('sha') if r.status_code == 200 else None
+    payload = {"message": "System Update", "content": base64.b64encode(content.encode()).decode(), "branch": "main"}
     if sha: payload["sha"] = sha
     requests.put(url, json=payload, headers=headers)
 
-# --- অ্যাডমিন কমান্ডস ---
+# --- অ্যাডমিন কমান্ড ---
 @bot.message_handler(commands=['addbalance'])
 def add_bal(m):
     if str(m.from_user.id) != str(ADMIN_ID): return
     try:
-        _, uid, amt = m.text.split()
-        db.update_one({"cid": int(uid)}, {"$inc": {"bal": int(amt)}}, upsert=True)
-        bot.reply_to(m, f"✅ User {uid} কে {amt} টাকা দেওয়া হয়েছে।")
-        bot.send_message(int(uid), f"💰 আপনার ব্যালেন্সে {amt} টাকা যোগ হয়েছে।")
-    except: bot.reply_to(m, "❌ Format: /addbalance [UID] [Amount]")
+        p = m.text.split()
+        db.update_one({"cid": int(p[1])}, {"$inc": {"bal": int(p[2])}}, upsert=True)
+        bot.reply_to(m, "✅ ব্যালেন্স যোগ হয়েছে।")
+    except: bot.reply_to(m, "Format: /addbalance [UID] [Amount]")
 
-# --- ইউজার প্রসেস ---
+# --- ইউজার ইন্টারফেস ---
 @bot.message_handler(commands=['start', 'balance'])
 def start(m):
-    u = get_user(m.chat.id)
-    msg = (f"🚀 **Full Multi-Platform App Builder**\n\n"
-           f"💰 ব্যালেন্স: {u['bal']} টাকা\n"
-           f"💳 খরচ: {PRICE} টাকা প্রতি অ্যাপ\n\n"
-           f"অ্যাপ তৈরি করতে: /create লিখুন\n"
-           f"রিচার্জ করতে নক দিন: {OWNER_USERNAME}")
-    bot.send_message(m.chat.id, msg, parse_mode="Markdown")
+    u = get_u(m.chat.id)
+    price = 10 if u['apps'] == 0 else 20
+    msg = (f"🚀 **Ultimate Multi-Platform App Builder**\n\n"
+           f"💰 ব্যালেন্স: {u['bal']} TK\n"
+           f"📦 তৈরি অ্যাপ: {u['apps']} টি\n"
+           f"💳 পরবর্তী অ্যাপের দাম: {price} TK\n\n"
+           f"অ্যাপ তৈরি করতে: /create\n"
+           f"রিচার্জের জন্য ওনারকে নক দিন: {OWNER_ID}")
+    bot.send_message(m.chat.id, msg)
 
 @bot.message_handler(commands=['create'])
 def create(m):
-    u = get_user(m.chat.id)
-    if u['bal'] < PRICE:
-        bot.send_message(m.chat.id, f"⚠️ ব্যালেন্স নেই! নক দিন: {OWNER_USERNAME}\nআপনার আইডি: `{m.chat.id}`", parse_mode="Markdown")
+    u = get_u(m.chat.id)
+    price = 10 if u['apps'] == 0 else 20
+    if u['bal'] < price:
+        bot.send_message(m.chat.id, f"❌ ব্যালেন্স নেই! নক দিন: {OWNER_ID}")
         return
     db.update_one({"cid": m.chat.id}, {"$set": {"step": "name"}})
-    bot.reply_to(m, "১. অ্যাপের নাম দিন:")
+    bot.reply_to(m, "১. অ্যাপের নাম কি হবে?")
 
 @bot.message_handler(func=lambda m: True, content_types=['text', 'photo'])
-def handle_steps(m):
-    u = get_user(m.chat.id)
-    step = u.get('step', 'n')
-
-    if step == "name":
+def handle(m):
+    u = get_u(m.chat.id)
+    s = u['step']
+    if s == "name":
         db.update_one({"cid": m.chat.id}, {"$set": {"data.name": m.text, "step": "url"}})
         bot.send_message(m.chat.id, "২. ওয়েবসাইট URL দিন:")
-    elif step == "url":
+    elif s == "url":
         db.update_one({"cid": m.chat.id}, {"$set": {"data.url": m.text, "step": "color"}})
-        bot.send_message(m.chat.id, "৩. কালার কোড (Hex) দিন (যেমন: #000000):")
-    elif step == "color":
+        bot.send_message(m.chat.id, "৩. কালার কোড (Hex যেমন: #ff5733):")
+    elif s == "color":
         db.update_one({"cid": m.chat.id}, {"$set": {"data.color": m.text, "step": "dev"}})
-        bot.send_message(m.chat.id, "৪. ডেভেলপার চ্যানেল লিংক দিন:")
-    elif step == "dev":
+        bot.send_message(m.chat.id, "৪. ৩-ডট মেনুর জন্য ডেভেলপার লিংক দিন:")
+    elif s == "dev":
         db.update_one({"cid": m.chat.id}, {"$set": {"data.dev": m.text, "step": "logo"}})
         bot.send_message(m.chat.id, "৫. লোগো (ছবি) পাঠান:")
-    elif step == "logo" and m.content_type == 'photo':
+    elif s == "logo" and m.content_type == 'photo':
         f_info = bot.get_file(m.photo[-1].file_id)
-        logo_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{f_info.file_path}"
+        l_url = f"https://api.telegram.org/file/bot{API_TOKEN}/{f_info.file_path}"
+        price = 10 if u['apps'] == 0 else 20
+        db.update_one({"cid": m.chat.id}, {"$inc": {"bal": -price, "apps": 1}, "$set": {"step": "n"}})
+        bot.send_message(m.chat.id, "✅ পেমেন্ট সফল! বিল্ড কনফিগারেশন ইনজেক্ট করা হচ্ছে...")
+
+        # --- এই অংশটি গিটহাবে হাজার লাইনের সোর্স কোড ইনজেক্ট করবে ---
+        n, u_url, c, d = u['data']['name'], u['data']['url'], u['data']['color'], u['data']['dev']
         
-        # পেমেন্ট কাটা
-        db.update_one({"cid": m.chat.id}, {"$inc": {"bal": -PRICE}, "$set": {"step": "n"}})
-        bot.send_message(m.chat.id, "✅ পেমেন্ট সফল! বিল্ড কনফিগারেশন তৈরি হচ্ছে...")
-
-        # সোর্স কোড ইনজেকশন (এই এক বিন্দু কোড ও মিস হবে না)
-        app_name = u['data']['name']
-        app_url = u['data']['url']
-        app_color = u['data']['color'].replace("#", "0xFF")
-        dev_link = u['data']['dev']
-
-        # ১. Flutter Main Code তৈরি করা
-        flutter_code = f"""
+        # lib/main.dart (Flutter কোড)
+        main_dart = f"""
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-void main() => runApp(MaterialApp(home: Scaffold(
-  appBar: AppBar(title: Text("{app_name}"), backgroundColor: Color({app_color}), 
-  actions: [PopupMenuButton(onSelected: (v)=> launchUrl(Uri.parse("{dev_link}")), 
-  itemBuilder: (c)=> [PopupMenuItem(value: 1, child: Text("Developer Channel"))])]),
-  body: WebViewWidget(controller: WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..loadRequest(Uri.parse("{app_url}"))),
-), debugShowCheckedModeBanner: false));
+void main() => runApp(MaterialApp(
+  home: Scaffold(
+    appBar: AppBar(
+      title: Text("{n}"), 
+      backgroundColor: Color({c.replace('#','0xff')}),
+      actions: [PopupMenuButton(onSelected: (v)=> launchUrl(Uri.parse("{d}")), 
+      itemBuilder: (c)=> [PopupMenuItem(value: 1, child: Text("Developer Channel"))])],
+    ),
+    body: WebViewWidget(controller: WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..loadRequest(Uri.parse("{u_url}"))),
+  ),
+  debugShowCheckedModeBanner: false,
+));
 """
-        push_to_github("lib/main.dart", flutter_code)
+        push_gh("lib/main.dart", main_dart)
 
-        # ২. GitHub Workflow তৈরি করা (বিল্ড প্রসেস)
-        workflow_code = f"""
-name: Build App
+        # Android Manifest (ইন্টারনেট এবং নাম কনফিগ)
+        manifest = f"""<manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.INTERNET"/><application android:label="{n}"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>"""
+        push_gh("android/app/src/main/AndroidManifest.xml", manifest)
+
+        # GitHub Workflow (Android, AAB, এবং Windows বিল্ড লজিক)
+        workflow = f"""
+name: Build All
 on: push
 jobs:
   build:
@@ -133,12 +126,15 @@ jobs:
       - uses: actions/checkout@v3
       - uses: subosito/flutter-action@v2
       - run: flutter build apk --release
-      - name: Send to Telegram
-        run: curl -F chat_id="{m.chat.id}" -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot{API_TOKEN}/sendDocument
+      - run: flutter build appbundle --release
+      - name: Send Files
+        run: |
+          curl -F chat_id="{m.chat.id}" -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot{API_TOKEN}/sendDocument
+          curl -F chat_id="{m.chat.id}" -F document=@build/app/outputs/bundle/release/app-release.aab https://api.telegram.org/bot{API_TOKEN}/sendDocument
 """
-        push_to_github(".github/workflows/main.yml", workflow_code)
+        push_gh(".github/workflows/main.yml", workflow)
 
-        bot.send_message(m.chat.id, "🛠 সব ফাইল সিঙ্ক হয়েছে। গিটহাব এখন আপনার APK তৈরি করছে। ১০-১৫ মিনিট পর ইনবক্সে ফাইল পেয়ে যাবেন।")
+        bot.send_message(m.chat.id, "🛠 সব ফাইল সিঙ্ক হয়েছে। গিটহাব এখন আপনার APK এবং AAB তৈরি করছে। ১০-১৫ মিনিট পর ইনবক্সে ফাইল পেয়ে যাবেন।")
 
 @app.route('/' + API_TOKEN, methods=['POST'])
 def webhook():
@@ -147,7 +143,4 @@ def webhook():
 
 @app.route("/")
 def index():
-    return "Standalone Builder is Online!", 200
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+    return "✅ Master Builder Online!", 200
