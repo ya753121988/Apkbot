@@ -1,8 +1,12 @@
-import os, requests, telebot, base64, json
-from flask import Flask, request
+import os
+import requests
+import telebot
+import base64
+import json
+from flask import Flask, request, abort
 from pymongo import MongoClient
 
-# --- আপনার দেওয়া সকল তথ্য (Hardcoded) ---
+# --- আপনার দেওয়া সকল তথ্য (Hardcoded - No changes) ---
 API_TOKEN = '8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s'
 GITHUB_TOKEN = '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'
 GITHUB_REPO = 'ya753121988/Apkbot'
@@ -12,6 +16,8 @@ OWNER_ID = '@AkashDeveloperBot'
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
+
+# --- ডাটাবেস কানেকশন ---
 client = MongoClient(MONGO_URI)
 db = client['FinalUltimateDB']['users']
 
@@ -28,12 +34,16 @@ def push_gh(path, content):
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     r = requests.get(url, headers=headers)
     sha = r.json().get('sha') if r.status_code == 200 else None
-    payload = {"message": f"Auto Setup: {path}", "content": base64.b64encode(content.encode('utf-8')).decode('utf-8'), "branch": "main"}
+    payload = {
+        "message": f"Auto Setup: {path}", 
+        "content": base64.b64encode(content.encode('utf-8')).decode('utf-8'), 
+        "branch": "main"
+    }
     if sha: payload["sha"] = sha
     res = requests.put(url, json=payload, headers=headers)
     return res.status_code
 
-# --- মাস্টার অটো-সেটআপ (৩০টি ফোল্ডারের সব প্রয়োজনীয় সোর্স কোড এখানে) ---
+# --- মাস্টার অটো-সেটআপ (আপনার দেওয়া লজিক) ---
 @app.route("/")
 def index():
     try:
@@ -66,7 +76,7 @@ def index():
     except Exception as e:
         return f"Error: {str(e)}", 500
 
-# --- বট প্রসেস শুরু ---
+# --- বটের কমান্ডসমূহ ---
 @bot.message_handler(commands=['addbalance'])
 def add_bal(m):
     if m.from_user.id != ADMIN_ID: return
@@ -125,10 +135,19 @@ def steps(m):
             json={"event_type":"build_app","client_payload":{"cid":str(m.chat.id)}},
             headers={"Authorization":f"token {GITHUB_TOKEN}"})
 
+# --- টেলিগ্রাম ওয়েবহুক হ্যান্ডলার (Render এর জন্য মাস্ট) ---
 @app.route('/' + API_TOKEN, methods=['POST'])
-def webhook():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "!", 200
+def telegram_webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "OK", 200
+    else:
+        abort(403)
 
+# --- রেন্ডার পোর্ট বাইন্ডিং ---
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+    # Render নিজে থেকে PORT এনভায়রনমেন্ট ভেরিয়েবল সেট করে দেয়
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
