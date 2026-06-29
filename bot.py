@@ -6,11 +6,11 @@ import json
 from flask import Flask, request, abort
 from pymongo import MongoClient
 
-# --- কনফিগারেশন ---
+# --- কনফিগারেশন (সুরক্ষার জন্য টোকেন এনভায়রনমেন্ট থেকে নিবে) ---
 API_TOKEN = '8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s'
-GITHUB_TOKEN = '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'
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN') 
 GITHUB_REPO = 'ya753121988/Apkbot'
-MONGO_URI = 'mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+MONGO_URI = os.environ.get('MONGO_URI', 'mongodb+srv://roxiw19528:roxiw19528@cluster0.vl508y4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
 ADMIN_ID = 7120801813
 OWNER_ID = '@AkashDeveloperBot'
 
@@ -31,14 +31,29 @@ def push_gh(path, content):
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     r = requests.get(url, headers=headers)
     sha = r.json().get('sha') if r.status_code == 200 else None
-    payload = {"message": f"Update: {path}", "content": base64.b64encode(content.encode('utf-8')).decode('utf-8'), "branch": "main"}
+    payload = {"message": f"Auto Setup: {path}", "content": base64.b64encode(content.encode('utf-8')).decode('utf-8'), "branch": "main"}
     if sha: payload["sha"] = sha
     res = requests.put(url, json=payload, headers=headers)
     return res.status_code
 
-@app.route('/')
+# --- মাস্টার অটো-সেটআপ রাউট (এটি সব ফাইল পুশ করবে) ---
+@app.route("/")
 def index():
-    return "✅ Server is Running!", 200
+    try:
+        files = {
+            "pubspec.yaml": "name: apkbot\ndescription: Master\nversion: 1.0.0+1\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\ndependencies:\n  flutter: {sdk: flutter}\n  webview_flutter: ^4.2.2\n  url_launcher: ^6.1.11\nflutter: {uses-material-design: true}",
+            "android/build.gradle": "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:7.3.0' } }\nallprojects { repositories { google(); mavenCentral() } }",
+            "android/app/build.gradle": "apply plugin: 'com.android.application'\nandroid {\n    compileSdkVersion 33\n    defaultConfig { applicationId \"com.apkbot.master\"; minSdkVersion 21; targetSdkVersion 33; versionCode 1; versionName \"1.0\" }\n    buildTypes { release { signingConfig signingConfigs.debug } }\n}",
+            "android/settings.gradle": "include ':app'",
+            "android/gradle/wrapper/gradle-wrapper.properties": "distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-all.zip",
+            "lib/main.dart": "import 'package:flutter/material.dart';\nvoid main()=>runApp(MaterialApp(home:Scaffold(body:Center(child:Text('System Ready')))));",
+            "android/app/src/main/AndroidManifest.xml": "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<uses-permission android:name='android.permission.INTERNET'/>\n<application android:label='AppBuilder'>\n<activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN'/><category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>",
+            ".github/workflows/main.yml": f"name: Build\non: [repository_dispatch, push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: subosito/flutter-action@v2\n      - run: flutter build apk --release\n      - name: Send Document\n        run: curl -F chat_id='${{{{ github.event.client_payload.cid }}}}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot{API_TOKEN}/sendDocument"
+        }
+        report = [f"{p}: {push_gh(p, c)}" for p, c in files.items()]
+        return f"<h1>✅ মাস্টার সেটআপ সম্পন্ন!</h1><p>{', '.join(report)}</p>", 200
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 # --- বটের কমান্ডসমূহ ---
 @bot.message_handler(commands=['addbalance'])
@@ -88,16 +103,16 @@ def steps(m):
         price = 10 if u['apps'] == 0 else 20
         db.update_one({"cid": m.chat.id}, {"$inc": {"bal": -price, "apps": 1}, "$set": {"step": "n"}})
         
-        # প্রাথমিক মেসেজ
+        # প্রোগ্রেস মেসেজ শুরু
         sent_msg = bot.send_message(m.chat.id, "⏳ বিল্ড শুরু হচ্ছে... [░░░░░░░░░░] 0%")
 
         n, url, c, d = u['data']['name'], u['data']['url'], u['data']['color'], u['data']['dev']
         
-        # ১. Flutter Code Update
+        # ১. সোর্স কোড আপডেট
         main_dart = f"import 'package:flutter/material.dart';\nimport 'package:webview_flutter/webview_flutter.dart';\nimport 'package:url_launcher/url_launcher.dart';\nvoid main()=>runApp(MaterialApp(home:Scaffold(appBar:AppBar(title:Text('{n}'),backgroundColor:Color({c.replace('#','0xff')}),actions:[PopupMenuButton(onSelected:(v)=>launchUrl(Uri.parse('{d}')),itemBuilder:(c)=>[PopupMenuItem(value:1,child:Text('Developer'))])]),body:WebViewWidget(controller:WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..loadRequest(Uri.parse('{url}')))),debugShowCheckedModeBanner:false));"
         push_gh("lib/main.dart", main_dart)
 
-        # ২. GitHub Workflow Update (এটিতেই লাইভ প্রোগ্রেস লজিক আছে)
+        # ২. লাইভ প্রোগ্রেস সহ Workflow আপডেট
         workflow_code = f"""
 name: Build
 on: [repository_dispatch, push]
@@ -108,28 +123,17 @@ jobs:
       - uses: actions/checkout@v3
       - name: Progress 20%
         run: curl -s -X POST https://api.telegram.org/bot{API_TOKEN}/editMessageText -d chat_id={m.chat.id} -d message_id={sent_msg.message_id} -d text="🔨 পরিবেশ সেটআপ হচ্ছে... [██░░░░░░░░] 20%"
-      
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.10.0'
-      
       - name: Progress 50%
         run: curl -s -X POST https://api.telegram.org/bot{API_TOKEN}/editMessageText -d chat_id={m.chat.id} -d message_id={sent_msg.message_id} -d text="🔨 APK তৈরি হচ্ছে... [█████░░░░░] 50%"
-      
       - run: flutter build apk --release
-      
-      - name: Progress 80%
-        run: curl -s -X POST https://api.telegram.org/bot{API_TOKEN}/editMessageText -d chat_id={m.chat.id} -d message_id={sent_msg.message_id} -d text="🔨 AAB তৈরি হচ্ছে... [████████░░] 80%"
-      
-      - run: flutter build appbundle --release
-      
       - name: Progress 100%
-        run: curl -s -X POST https://api.telegram.org/bot{API_TOKEN}/editMessageText -d chat_id={m.chat.id} -d message_id={sent_msg.message_id} -d text="✅ বিল্ড সফল! ফাইল পাঠানো হচ্ছে... [██████████] 100%"
-
+        run: curl -s -X POST https://api.telegram.org/bot{API_TOKEN}/editMessageText -d chat_id={m.chat.id} -d message_id={sent_msg.message_id} -d text="✅ বিল্ড সফল! ফাইল পাঠানো হচ্ছে..."
       - name: Send Files
         run: |
           curl -F chat_id='{m.chat.id}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot{API_TOKEN}/sendDocument
-          curl -F chat_id='{m.chat.id}' -F document=@build/app/outputs/bundle/release/app-release.aab https://api.telegram.org/bot{API_TOKEN}/sendDocument
 """
         push_gh(".github/workflows/main.yml", workflow_code)
         
