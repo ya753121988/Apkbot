@@ -6,7 +6,7 @@ import json
 from flask import Flask, request, abort
 from pymongo import MongoClient
 
-# --- আপনার দেওয়া সকল তথ্য (Hardcoded - No changes) ---
+# --- আপনার দেওয়া সকল কনফিগারেশন (No Changes) ---
 API_TOKEN = '8876597863:AAE3A99UKha71_6X1hpJyZe8ySbTJkbLg_s'
 GITHUB_TOKEN = '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'
 GITHUB_REPO = 'ya753121988/Apkbot'
@@ -43,36 +43,25 @@ def push_gh(path, content):
     res = requests.put(url, json=payload, headers=headers)
     return res.status_code
 
-# --- মাস্টার অটো-সেটআপ (আপনার দেওয়া লজিক) ---
+# --- মাস্টার অটো-সেটআপ (এই লিঙ্কে ঢুকলে ফাইল ইনজেক্ট হবে) ---
 @app.route("/")
 def index():
     try:
         files = {
-            # ১. প্রজেক্ট কনফিগ
             "pubspec.yaml": "name: apkbot\ndescription: Master\nversion: 1.0.0+1\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\ndependencies:\n  flutter: {sdk: flutter}\n  webview_flutter: ^4.2.2\n  url_launcher: ^6.1.11\nflutter: {uses-material-design: true}",
-            
-            # ২. অ্যান্ড্রয়েড গ্রেডল ও ফোল্ডার স্ট্রাকচার
             "android/build.gradle": "buildscript { repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:7.3.0' } }\nallprojects { repositories { google(); mavenCentral() } }",
             "android/app/build.gradle": "apply plugin: 'com.android.application'\nandroid {\n    compileSdkVersion 33\n    defaultConfig { applicationId \"com.apkbot.master\"; minSdkVersion 21; targetSdkVersion 33; versionCode 1; versionName \"1.0\" }\n    buildTypes { release { signingConfig signingConfigs.debug } }\n}",
             "android/settings.gradle": "include ':app'",
             "android/gradle/wrapper/gradle-wrapper.properties": "distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-all.zip",
-            
-            # ৩. সোর্স কোড (lib ফোল্ডার)
             "lib/main.dart": "import 'package:flutter/material.dart';\nvoid main()=>runApp(MaterialApp(home:Scaffold(body:Center(child:Text('System Ready')))));",
-            
-            # ৪. অ্যান্ড্রয়েড ম্যানিফেস্ট (পারমিশন সহ)
             "android/app/src/main/AndroidManifest.xml": "<manifest xmlns:android='http://schemas.android.com/apk/res/android'>\n<uses-permission android:name='android.permission.INTERNET'/>\n<application android:label='AppBuilder'>\n<activity android:name='.MainActivity' android:exported='true'><intent-filter><action android:name='android.intent.action.MAIN'/><category android:name='android.intent.category.LAUNCHER'/></intent-filter></activity></application></manifest>",
-            
-            # ৫. গিটহাব ওয়ার্কফ্লো (অ্যান্ড্রয়েড, AAB ও পিসি বিল্ড ইঞ্জিন)
             ".github/workflows/main.yml": f"name: Build\non: [repository_dispatch, push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: subosito/flutter-action@v2\n      - run: flutter build apk --release\n      - run: flutter build appbundle --release\n      - name: Send Document\n        run: |\n          curl -F chat_id='${{{{ github.event.client_payload.cid }}}}' -F document=@build/app/outputs/flutter-apk/app-release.apk https://api.telegram.org/bot{API_TOKEN}/sendDocument\n          curl -F chat_id='${{{{ github.event.client_payload.cid }}}}' -F document=@build/app/outputs/bundle/release/app-release.aab https://api.telegram.org/bot{API_TOKEN}/sendDocument"
         }
-        
         report = []
         for path, content in files.items():
             status = push_gh(path, content)
             report.append(f"{path}: {status}")
-            
-        return f"<h1>✅ সব সোর্স কোড ও ৩০ ফোল্ডার ইনজেক্ট হয়েছে!</h1><p>{', '.join(report)}</p>", 200
+        return f"<h1>✅ Bot Is Live!</h1><p>Setup Status: {', '.join(report)}</p>", 200
     except Exception as e:
         return f"Error: {str(e)}", 500
 
@@ -125,28 +114,26 @@ def steps(m):
         db.update_one({"cid": m.chat.id}, {"$inc": {"bal": -price, "apps": 1}, "$set": {"step": "n"}})
         bot.send_message(m.chat.id, "✅ পেমেন্ট সফল! বিল্ড শুরু হয়েছে। ১৫ মিনিট অপেক্ষা করুন।")
 
-        # অ্যাপের আসল সোর্স কোড ইনজেকশন
         n, url, c, d = u['data']['name'], u['data']['url'], u['data']['color'], u['data']['dev']
         main_dart = f"import 'package:flutter/material.dart';\nimport 'package:webview_flutter/webview_flutter.dart';\nimport 'package:url_launcher/url_launcher.dart';\nvoid main()=>runApp(MaterialApp(home:Scaffold(appBar:AppBar(title:Text('{n}'),backgroundColor:Color({c.replace('#','0xff')}),actions:[PopupMenuButton(onSelected:(v)=>launchUrl(Uri.parse('{d}')),itemBuilder:(c)=>[PopupMenuItem(value:1,child:Text('Developer'))])]),body:WebViewWidget(controller:WebViewController()..setJavaScriptMode(JavaScriptMode.unrestricted)..loadRequest(Uri.parse('{url}')))),debugShowCheckedModeBanner:false));"
         push_gh("lib/main.dart", main_dart)
         
-        # বিল্ড ট্রিগার
         requests.post(f"https://api.github.com/repos/{GITHUB_REPO}/dispatches", 
             json={"event_type":"build_app","client_payload":{"cid":str(m.chat.id)}},
             headers={"Authorization":f"token {GITHUB_TOKEN}"})
 
-# --- টেলিগ্রাম ওয়েবহুক হ্যান্ডলার (Render এর জন্য মাস্ট) ---
+# --- টেলিগ্রাম ওয়েবহুক রাউট (Render এর জন্য অত্যন্ত জরুরি) ---
 @app.route('/' + API_TOKEN, methods=['POST'])
-def telegram_webhook():
+def webhook():
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
         bot.process_new_updates([update])
-        return "OK", 200
+        return "!", 200
     else:
         abort(403)
 
-# --- রেন্ডার পোর্ট বাইন্ডিং ---
+# --- রেন্ডার পোর্ট এবং সার্ভার রান ---
 if __name__ == "__main__":
     # Render নিজে থেকে PORT এনভায়রনমেন্ট ভেরিয়েবল সেট করে দেয়
     port = int(os.environ.get("PORT", 5000))
